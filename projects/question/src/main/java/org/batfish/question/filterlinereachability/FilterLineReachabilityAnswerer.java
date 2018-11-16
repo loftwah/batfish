@@ -477,6 +477,7 @@ public class FilterLineReachabilityAnswerer extends Answerer {
 
       // compute blocking lines
       for (int lineNum : unreachableButMatchableLineNums) {
+        /*
         SortedSet<Integer> blockingLineNums = new TreeSet<Integer>();
         BDD restOfLine = ipLineToBDDMap.get(lineNum);
 
@@ -492,7 +493,55 @@ public class FilterLineReachabilityAnswerer extends Answerer {
           }
         }
         answerRows.addUnreachableLine(aclSpec, lineNum, false, blockingLineNums);
+        */
+        SortedSet<Integer> blockingLineNums =
+            computeMinimalBlockingLines(lineNum, ipLineToBDDMap);
+        answerRows.addUnreachableLine(aclSpec, lineNum, false, blockingLineNums);
       }
     }
+  }
+
+  private static SortedSet<Integer> computeMinimalBlockingLines1(
+      int blockedLineNum, List<BDD> ipLineToBDDMap) {
+    SortedSet<Integer> blockingLineNums = new TreeSet<Integer>();
+    BDD restOfLine = ipLineToBDDMap.get(blockedLineNum);
+
+    for (int prevLineNum = 0; prevLineNum < blockedLineNum; prevLineNum++) {
+      if (restOfLine.isZero()) {
+        break;
+      }
+      BDD prevBDD = ipLineToBDDMap.get(prevLineNum);
+
+      if (!(prevBDD.and(restOfLine).isZero())) {
+        blockingLineNums.add(prevLineNum);
+        restOfLine = restOfLine.and(prevBDD.not());
+      }
+    }
+    return blockingLineNums;
+  }
+
+  private static SortedSet<Integer> computeMinimalBlockingLines(
+      int blockedLineNum, List<BDD> ipLineToBDDMap) {
+    SortedSet<Integer> blockingLineNums = new TreeSet<Integer>();
+    BDD rest = ipLineToBDDMap.get(blockedLineNum);
+
+    while (!rest.isZero()) {
+      double maxCoveredFlowCount = .0;
+      int coverLine = 0;
+
+      for (int i = 0; i < blockedLineNum; i++) {
+        BDD lineBDD = ipLineToBDDMap.get(i);
+        BDD covered = lineBDD.and(rest);
+        double coveredFlowCount = covered.logSatCount();
+        if (coveredFlowCount > maxCoveredFlowCount) {
+          maxCoveredFlowCount = coveredFlowCount;
+          coverLine = i;
+        }
+      }
+
+      blockingLineNums.add(coverLine);
+      rest = rest.and(ipLineToBDDMap.get(coverLine).not());
+    }
+    return blockingLineNums;
   }
 }
